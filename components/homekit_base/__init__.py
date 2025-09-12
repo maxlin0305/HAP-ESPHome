@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import mdns, wifi, light, lock, sensor, switch
+from esphome.components import mdns, wifi, light, lock, sensor, switch, climate
 from esphome.const import CONF_PORT, PLATFORM_ESP32, CONF_ID
 from esphome.core import ID, Lambda
 from esphome.components.esp32 import add_idf_component, add_idf_sdkconfig_option
@@ -14,6 +14,7 @@ homekit_ns = cg.esphome_ns.namespace('homekit')
 HAPRootComponent = homekit_ns.class_('HAPRootComponent', cg.Component)
 AInfo = homekit_ns.enum("AInfo")
 CONF_HAP_ID = "hap_id"
+ClimateEntity = homekit_ns.class_('ClimateEntity')
 
 def hk_setup_code(value):
     """Validate that a given config value is a valid icon."""
