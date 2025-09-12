@@ -17,6 +17,12 @@ TemperatureUnits = homekit_ns.enum("TemperatureUnits")
 AInfo = homekit_ns.enum("AInfo")
 HKFinish = homekit_ns.enum("HKFinish")
 HAPAccessory = homekit_ns.class_('HAPAccessory', cg.Component)
+
+# -----------------------------
+# 新增 ClimateEntity
+# -----------------------------
+ClimateEntity = homekit_ns.class_('ClimateEntity')
+
 LightEntity = homekit_ns.class_('LightEntity')
 SensorEntity = homekit_ns.class_('SensorEntity')
 SwitchEntity = homekit_ns.class_('SwitchEntity')
@@ -82,6 +88,7 @@ cv.only_with_esp_idf)
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
+
     if 'light' in config:
         for l in config["light"]:
             light_entity = cg.Pvariable(ID(f"{l['id'].id}_hk_light_entity", type=LightEntity), var.add_light(await cg.get_variable(l['id'])))
@@ -90,6 +97,7 @@ async def to_code(config):
                 for m in l["meta"]:
                     info_temp.append([ACC_INFO[m], l["meta"][m]])
                 cg.add(light_entity.setInfo(info_temp))
+
     if 'sensor' in config:
         for l in config["sensor"]:
             sensor_entity = cg.Pvariable(ID(f"{l['id'].id}_hk_sensor_entity", type=SensorEntity), var.add_sensor(await cg.get_variable(l['id']), l['temp_units']))
@@ -98,6 +106,7 @@ async def to_code(config):
                 for m in l["meta"]:
                     info_temp.append([ACC_INFO[m], l["meta"][m]])
                 cg.add(sensor_entity.setInfo(info_temp))
+
     if 'lock' in config:
         for l in config["lock"]:
             lock_entity = cg.Pvariable(ID(f"{l['id'].id}_hk_lock_entity", type=LockEntity), var.add_lock(await cg.get_variable(l['id'])))
@@ -126,6 +135,7 @@ async def to_code(config):
                 for m in l["meta"]:
                     info_temp.append([ACC_INFO[m], l["meta"][m]])
                 cg.add(lock_entity.setInfo(info_temp))
+
     if "fan" in config:
         for l in config["fan"]:
             fan_entity = cg.Pvariable(ID(f"{l['id'].id}_hk_fan_entity", type=FanEntity), var.add_fan(await cg.get_variable(l['id'])))
@@ -134,6 +144,7 @@ async def to_code(config):
                 for m in l["meta"]:
                     info_temp.append([ACC_INFO[m], l["meta"][m]])
                 cg.add(fan_entity.setInfo(info_temp))
+
     if "switch" in config:
         for l in config["switch"]:
             switch_entity = cg.Pvariable(ID(f"{l['id'].id}_hk_switch_entity", type=SwitchEntity), var.add_switch(await cg.get_variable(l['id'])))
@@ -142,6 +153,7 @@ async def to_code(config):
                 for m in l["meta"]:
                     info_temp.append([ACC_INFO[m], l["meta"][m]])
                 cg.add(switch_entity.setInfo(info_temp))
+
     if "climate" in config:
         for l in config["climate"]:
             climate_entity = cg.Pvariable(ID(f"{l['id'].id}_hk_climate_entity", type=ClimateEntity), var.add_climate(await cg.get_variable(l['id'])))
