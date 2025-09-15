@@ -1,6 +1,6 @@
 #pragma once
 #include <esphome/core/defines.h>
-#ifdef USE_SWITCH
+#ifdef USE_SENSOR
 #include <esphome/core/application.h>
 #include <hap.h>
 #include <hap_apple_servs.h>
@@ -11,92 +11,99 @@ namespace esphome
 {
   namespace homekit
   {
-    class SwitchEntity : public HAPEntity
+    class SensorEntity : public HAPEntity
     {
     private:
-      static constexpr const char* TAG = "SwitchEntity";
-      switch_::Switch* switchPtr;
-      static int switch_write(hap_write_data_t write_data[], int count, void* serv_priv, void* write_priv) {
-        switch_::Switch* switchPtr = (switch_::Switch*)serv_priv;
-        ESP_LOGD(TAG, "Write called for Accessory %s (%s)", std::to_string(switchPtr->get_object_id_hash()).c_str(), switchPtr->get_name().c_str());
-        int i, ret = HAP_SUCCESS;
-        hap_write_data_t* write;
-        for (i = 0; i < count; i++) {
-          write = &write_data[i];
-          if (!strcmp(hap_char_get_type_uuid(write->hc), HAP_CHAR_UUID_ON)) {
-            ESP_LOGD(TAG, "Received Write for switch '%s' -> %s", switchPtr->get_name().c_str(), write->val.b ? "On" : "Off");
-            ESP_LOGD(TAG, "[STATE] CURRENT STATE: %d", switchPtr->state);
-            write->val.b ? switchPtr->turn_on() : switchPtr->turn_off();
-            hap_char_update_val(write->hc, &(write->val));
-            *(write->status) = HAP_STATUS_SUCCESS;
-          }
-          else {
-            *(write->status) = HAP_STATUS_RES_ABSENT;
-          }
-        }
-        return ret;
-      }
-      static void on_switch_update(switch_::Switch* obj, bool v) {
-        ESP_LOGD(TAG, "%s state: %d", obj->get_name().c_str(), v);
-        hap_acc_t* acc = hap_acc_get_by_aid(hap_get_unique_aid(std::to_string(obj->get_object_id_hash()).c_str()));
-        if (acc) {
-          hap_serv_t* hs = hap_acc_get_serv_by_uuid(acc, HAP_SERV_UUID_SWITCH);
-          hap_char_t* on_char = hap_serv_get_char_by_uuid(hs, HAP_CHAR_UUID_ON);
-          hap_val_t state;
-          state.b = v;
-          hap_char_update_val(on_char, &state);
-        }
-      }
+      static constexpr const char* TAG = "SensorEntity";
+      sensor::Sensor* sensorPtr;
+
       static int acc_identify(hap_acc_t* ha) {
         ESP_LOGI(TAG, "Accessory identified");
         return HAP_SUCCESS;
       }
+
+      static void on_sensor_update(sensor::Sensor* obj, float value) {
+        hap_acc_t* acc = hap_acc_get_by_aid(hap_get_unique_aid(std::to_string(obj->get_object_id_hash()).c_str()));
+        if (!acc) return;
+
+        hap_serv_t* service = nullptr;
+        hap_char_t* char_val = nullptr;
+
+        switch (obj->get_class()) {
+          case sensor::Sensor::CLASS_TEMPERATURE:
+            service = hap_acc_get_serv_by_uuid(acc, HAP_SERV_UUID_TEMPERATURE_SENSOR);
+            char_val = hap_serv_get_char_by_uuid(service, HAP_CHAR_UUID_CURRENT_TEMPERATURE);
+            break;
+          case sensor::Sensor::CLASS_HUMIDITY:
+            service = hap_acc_get_serv_by_uuid(acc, HAP_SERV_UUID_HUMIDITY_SENSOR);
+            char_val = hap_serv_get_char_by_uuid(service, HAP_CHAR_UUID_CURRENT_RELATIVE_HUMIDITY);
+            break;
+          case sensor::Sensor::CLASS_AIR_QUALITY:
+            service = hap_acc_get_serv_by_uuid(acc, HAP_SERV_UUID_AIR_QUALITY_SENSOR);
+            char_val = hap_serv_get_char_by_uuid(service, HAP_CHAR_UUID_AIR_QUALITY);
+            break;
+          default:
+            return;
+        }
+
+        if (char_val) {
+          hap_val_t state;
+          state.f = value;
+          hap_char_update_val(char_val, &state);
+        }
+      }
+
     public:
-      SwitchEntity(switch_::Switch* switchPtr) : HAPEntity({{MODEL, "HAP-SWITCH"}}), switchPtr(switchPtr) {}
+      SensorEntity(sensor::Sensor* sensorPtr) : HAPEntity({{MODEL, "HAP-SENSOR"}}), sensorPtr(sensorPtr) {}
+
       void setup() {
         hap_acc_cfg_t acc_cfg = {
-            .model = strdup(accessory_info[MODEL]),
-            .manufacturer = strdup(accessory_info[MANUFACTURER]),
-            .fw_rev = strdup(accessory_info[FW_REV]),
-            .hw_rev = NULL,
-            .pv = strdup("1.1.0"),
-            .cid = HAP_CID_BRIDGE,
-            .identify_routine = acc_identify,
+          .name = nullptr,
+          .serial_num = nullptr,
+          .model = strdup(accessory_info[MODEL]),
+          .manufacturer = strdup(accessory_info[MANUFACTURER]),
+          .fw_rev = strdup(accessory_info[FW_REV]),
+          .hw_rev = strdup("ESP32C3"),
+          .pv = strdup("1.1.0"),
+          .cid = HAP_CID_SENSOR,
+          .identify_routine = acc_identify,
+          .pvt = nullptr
         };
-        hap_acc_t* accessory = nullptr;
+
+        std::string accessory_name = sensorPtr->get_name();
+        acc_cfg.name = accessory_info[NAME] ? strdup(accessory_info[NAME])
+                                            : strdup(accessory_name.c_str());
+        acc_cfg.serial_num = accessory_info[SN] ? strdup(accessory_info[SN])
+                                                : strdup(std::to_string(sensorPtr->get_object_id_hash()).c_str());
+
+        hap_acc_t* accessory = hap_acc_create(&acc_cfg);
+
         hap_serv_t* service = nullptr;
-        std::string accessory_name = switchPtr->get_name();
-        if (accessory_info[NAME] == NULL) {
-          acc_cfg.name = strdup(accessory_name.c_str());
-        }
-        else {
-          acc_cfg.name = strdup(accessory_info[NAME]);
-        }
-        if (accessory_info[SN] == NULL) {
-          acc_cfg.serial_num = strdup(std::to_string(switchPtr->get_object_id_hash()).c_str());
-        }
-        else {
-          acc_cfg.serial_num = strdup(accessory_info[SN]);
-        }
-        /* Create accessory object */
-        accessory = hap_acc_create(&acc_cfg);
-        /* Create the switch Service. */
-        service = hap_serv_switch_create(switchPtr->state);
 
-        ESP_LOGD(TAG, "ID HASH: %lu", switchPtr->get_object_id_hash());
-        hap_serv_set_priv(service, switchPtr);
+        // 建立對應 HomeKit service
+        switch (sensorPtr->get_class()) {
+          case sensor::Sensor::CLASS_TEMPERATURE:
+            service = hap_serv_create(HAP_SERV_UUID_TEMPERATURE_SENSOR);
+            break;
+          case sensor::Sensor::CLASS_HUMIDITY:
+            service = hap_serv_create(HAP_SERV_UUID_HUMIDITY_SENSOR);
+            break;
+          case sensor::Sensor::CLASS_AIR_QUALITY:
+            service = hap_serv_create(HAP_SERV_UUID_AIR_QUALITY_SENSOR);
+            break;
+          default:
+            ESP_LOGW(TAG, "Unsupported sensor class for '%s'", accessory_name.c_str());
+            return;
+        }
 
-        /* Set the write callback for the service */
-        hap_serv_set_write_cb(service, switch_write);
-
-        /* Add the Switch Service to the Accessory Object */
+        hap_serv_set_priv(service, sensorPtr);
         hap_acc_add_serv(accessory, service);
+        hap_add_bridged_accessory(accessory, hap_get_unique_aid(std::to_string(sensorPtr->get_object_id_hash()).c_str()));
 
-        /* Add the Accessory to the HomeKit Database */
-        hap_add_bridged_accessory(accessory, hap_get_unique_aid(std::to_string(switchPtr->get_object_id_hash()).c_str()));
-        if (!switchPtr->is_internal())
-          switchPtr->add_on_state_callback([this](bool v) { SwitchEntity::on_switch_update(switchPtr, v); });
-        ESP_LOGI(TAG, "Switch '%s' linked to HomeKit", accessory_name.c_str());
+        if (!sensorPtr->is_internal())
+          sensorPtr->add_on_value_callback([this](float v) { SensorEntity::on_sensor_update(sensorPtr, v); });
+
+        ESP_LOGI(TAG, "Sensor '%s' linked to HomeKit", accessory_name.c_str());
       }
     };
   }
